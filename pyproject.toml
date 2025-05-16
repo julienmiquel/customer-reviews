@@ -1,0 +1,43 @@
+[tool.poetry]
+name = "reviews-to-bigquery"
+version = "0.1.0"
+description = "A tool to fetch and store Burger King reviews in France using Google Places API"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+packages = [{include = "bk_maps"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+google-cloud-bigquery = "^3.11.4"
+google-maps-places = "^0.1.0"
+python-dotenv = "^1.0.0"
+structlog = "^23.1.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+black = "^23.0.0"
+isort = "^5.12.0"
+mypy = "^1.0.0"
+flake8 = "^6.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.poetry.scripts]
+fetch-reviews = "scripts.fetch_reviews:main" 
