@@ -1,0 +1,120 @@
+config {
+    type: "incremental",
+    name: "reviews_pros_cons" ,
+    description : "Review analyzed by Gemini model."
+}
+
+-- ,"bigquery","tags","uniqueKey","dependencies","hermetic","schema","assertions","database","columns","description","materialized","dependOnDependencyAssertions"]
+--CREATE OR REPLACE TABLE `ml-demo-384110.burger_king_reviews_currated.reviews_gemini` as 
+SELECT
+#  ml_response.ml_generate_text_llm_result AS generated_description,
+  review_pros,
+  review_cons,
+  review_description,
+  #ml_response.ml_generate_text_rai_result as rai_result,                  
+  #ml_response.ml_generate_text_status as llm_status,
+  source_table.text as review_text,
+  #ml_response.ml_generate_text_status,  
+  source_table.place_id,
+source_table.formatted_address,
+source_table.display_name,
+source_table.overall_rating,
+source_table.total_ratings,
+--author
+source_table.review_rating,
+source_table.review_datetime,
+source_table.longitude,
+source_table.latitude
+
+FROM
+  AI.GENERATE_TABLE(
+    MODEL ${ref("gemini")},
+    (
+      SELECT
+        *, 
+CONCAT(
+    "You are a PR professional for high-end businesses. Follow these Instructions, and base your response on the provided User Input.",
+    "Instructions:",
+    "* Read through reviews submitted to you.",
+    "* Summarize the pros and cons of the business based on reviews.",
+    "* Output your response as a single JSON object.",
+    "* Keep it concise.",
+    "* Include a field named 'advice' containing 3 - 5 sentences of advice to the business on how to improve.",
+    "* Stick to the facts.",
+    "* Do not hallucinate.",
+    "* If there are conflicting opinions, only include the opinion that is recorded the most.",
+    "* Do not include any irrelevant information.",
+    "* Do not mention any reviewers by name.",
+    "* review_pros: contain hashtags of the topic. If no topic are reported, return empty string",
+    "* review_pros: contain hashtags of the topic. If no topic are reported, return empty string",
+    "* review_description: contain description of the pros and cons",
+    "* hashtags do not have # at the begining. hashtags are standardized with CamelCase and are in the following list (choose the best one): ",
+  "FastFoodQuality ",
+  "TastyFastFood ",
+  "FreshIngredients ",
+  "HotFoodColdDrinks ",
+  "OrderAccuracy ", 
+  "FoodConsistency ",
+  "DeliciouslyFast ",
+  "FastService ",
+  "QuickBites ",
+  "NoWaitTime ",
+  "EfficientService ",
+  "DriveThruSpeed ",
+  "FastFoodFast ",
+  "GetMyOrderRight ",
+  "OrderAccuracyMatters ",
+  "CorrectOrder ",
+  "RightEveryTime ",
+  "FastFoodAccuracy ",
+  "CleanRestaurant ",
+  "FastFoodHygiene ",
+  "SpotlessDining ",
+  "CleanRestrooms ",
+  "HygienicService ",
+  "FriendlyStaff ",
+  "UnfriendlyStaff ",
+  "GreatService ",
+  "HelpfulEmployees ",
+  "FastFoodService ",
+  "CustomerCare ",
+  "ServiceWithASmile ",
+  "GoodValue ",
+  "AffordableEats ",
+  "FastFoodDeals ",
+  "ValueForMoney ",
+  "BudgetFriendlyFood ",
+  "ConvenientDining ",
+  "EasyAccess ",
+  "DriveThruLife ",
+  "MobileOrder ",
+  "FastFoodNearMe ",
+  "KioskOrdering ",
+  "RestaurantVibes ",
+  "ComfortableFastFood ",
+  "CleanAmbiance ",
+  "FastFoodAtmosphere ",
+  "MenuVariety ",
+  "InStock ",
+  "FavoriteItems ",
+  "ClearMenu ",
+  "FastFoodMenu ",
+    'Customer review here: ', text, "\n\n. Customer rating", review_rating
+) AS prompt
+FROM
+        ${ref("reviews_view")} AS source_table
+        where length(text ) > 5  
+        --and review_rating < 4                 limit 10
+    ),
+    STRUCT(
+      'review_pros ARRAY<STRING>, review_cons ARRAY<STRING>, review_description ARRAY<STRING>' AS output_schema,
+      0.2 AS temperature,
+      1500 AS max_output_tokens
+      )
+  ) AS ml_response
+JOIN
+  ${ref("reviews_view")} AS source_table
+ON ml_response.text = source_table.text 
+and ml_response.total_ratings = source_table.total_ratings
+and ml_response.review_datetime = source_table.review_datetime
+and ml_response.place_id = source_table.place_id

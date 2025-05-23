@@ -1,0 +1,5 @@
+defaultProject: ml-demo-384110
+defaultLocation: EU
+defaultDataset: burger_king_reviews_currated
+defaultAssertionDataset: burger_king_reviews_currated_assertions
+dataformCoreVersion: 3.0.0

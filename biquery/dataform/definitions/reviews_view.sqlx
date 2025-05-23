@@ -1,0 +1,53 @@
+config {
+    type: "view", // Creates a view in BigQuery. Try changing to "table" instead.
+    materialized: true,
+
+    columns: {
+        formatted_address: "",
+        display_name: "",
+        overall_rating: "",
+        total_ratings: "",
+        author: "",
+        review_rating: "",
+        text: "",
+        review_datetime: "",
+        longitude: "",
+        latitude: ""
+    }
+}
+
+  -- This is an example SQLX file to help you learn the basics of Dataform.
+  -- Visit https://cloud.google.com/dataform/docs/sql-workflows for more information on how to configure your SQL workflow.
+  -- You can delete this file, then commit and push your changes to your repository when you are ready.
+  -- Config blocks allow you to configure, document, and test your data assets.
+  -- The rest of a SQLX file contains your SELECT statement used to create the table.
+WITH DATA AS (
+  SELECT
+    DISTINCT 
+    places.place_id,
+    places.formatted_address AS formatted_address,
+    places.display_name,
+    overall_rating,
+    total_ratings,
+    author,
+    review_rating,
+    text,
+    TIMESTAMP_SECONDS(CAST(time_review AS INT64)) AS review_datetime,
+    ST_X(places.location) AS longitude,
+    ST_Y(places.location) AS latitude
+  FROM
+    `ml-demo-384110.burger_king_reviews_dataset.france_reviews_v2` AS france_reviews_v2,
+    UNNEST(france_reviews_v2.reviews),
+    `ml-demo-384110.burger_king_reviews_dataset.places_details_v2` AS places
+  WHERE
+    places.place_id = france_reviews_v2.place_id
+    AND formatted_address LIKE '%France%'
+    AND display_name LIKE '%Burger%' )
+  #select count(*) c from data
+SELECT
+  *
+FROM
+  DATA
+  #select display_name, formatted_address, count(*) nb from data group by display_name, formatted_address order by nb desc
+  #select * from data 
+  #order by review_datetime desc
