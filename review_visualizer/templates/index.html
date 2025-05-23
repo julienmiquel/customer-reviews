@@ -117,40 +117,33 @@
     </div>
 
     <script>
-        // Data from Flask, ensure this is defined before initMap if initMap uses it directly
         const restaurantsMapData = {{ restaurants_map_data|tojson }};
 
-        async function initMap() {
+        async function initMap() { // 1.a. Make initMap async
             const mapElement = document.getElementById("map");
 
             if (!mapElement) {
                 console.error("Map element not found!");
                 return;
             }
-            if (!google || !google.maps) {
-                console.error("Google Maps API not loaded!");
+            if (!google || !google.maps || !google.maps.importLibrary) { // Check for importLibrary
+                console.error("Google Maps API or importLibrary not loaded!");
                 mapElement.innerHTML = '<p class="no-data">Error: Google Maps API failed to load.</p>';
                 return;
             }
-             if (!google.maps.marker) { // Check if marker library is loaded
-                console.error("Google Maps Marker library not loaded. Make sure 'libraries=marker' is in API script URL.");
-                mapElement.innerHTML = '<p class="no-data">Error: Google Maps Marker library failed to load.</p>';
-                return;
-            }
+            
+            // 1.a. Import AdvancedMarkerElement and PinElement
+            const { AdvancedMarkerElement, PinElement } = await google.maps.importLibrary("marker");
 
-
-            // 1.b.i Access restaurants_map_data and handle no data
             if (!restaurantsMapData || restaurantsMapData.length === 0) {
                 mapElement.innerHTML = '<p class="no-data">No restaurant location data available to display on map.</p>';
                 console.log("No restaurant data for map.");
                 return;
             }
 
-            // 1.b.ii Initialize the Map
-            let mapCenter = { lat: 40.7128, lng: -74.0060 }; // Default to NYC
-            let initialZoom = 4; // Default zoom for no data or widespread data
+            let mapCenter = { lat: 40.7128, lng: -74.0060 }; 
+            let initialZoom = 4; 
 
-            // Calculate average coordinates for map center if data exists
             let totalLat = 0;
             let totalLng = 0;
             let validCoordsCount = 0;
@@ -164,21 +157,19 @@
 
             if (validCoordsCount > 0) {
                 mapCenter = { lat: totalLat / validCoordsCount, lng: totalLng / validCoordsCount };
-                initialZoom = 6; // Zoom in a bit more if we have a calculated center
+                initialZoom = 6; 
             }
-             if (validCoordsCount === 1 && restaurantsMapData.length ===1 ) { // If only one restaurant, center on it and zoom more
+             if (validCoordsCount === 1 && restaurantsMapData.length ===1 ) { 
                 mapCenter = { lat: restaurantsMapData[0].lat, lng: restaurantsMapData[0].lng };
                 initialZoom = 12;
             }
 
-
             const map = new google.maps.Map(mapElement, {
                 zoom: initialZoom,
                 center: mapCenter,
-                mapId: 'BURGER_KING_REVIEWS_MAP' // Required for Advanced Markers, optional for standard markers
+                mapId: 'DEMO_MAP_ID' // 1.b. Add mapId
             });
 
-            // 1.b.iii Create Markers and Info Windows
             const infoWindow = new google.maps.InfoWindow();
             const markers = [];
 
@@ -188,21 +179,33 @@
                     return; 
                 }
 
-                let markerColorName;
-                if (restaurant.avg_rating >= 4.0) markerColorName = 'green';
-                else if (restaurant.avg_rating >= 3.0) markerColorName = 'yellow';
-                else markerColorName = 'red';
-                
-                const markerIconUrl = `http://maps.google.com/mapfiles/ms/icons/${markerColorName}-dot.png`;
-
-                const marker = new google.maps.Marker({
-                    position: { lat: restaurant.lat, lng: restaurant.lng },
-                    map: map,
-                    title: restaurant.name,
-                    icon: markerIconUrl,
+                // 1.c.ii. Create PinElement for Styling
+                let pinBackgroundColor;
+                if (restaurant.avg_rating >= 4.0) {
+                    pinBackgroundColor = 'green';
+                } else if (restaurant.avg_rating >= 3.0) {
+                    pinBackgroundColor = 'orange'; // Changed yellow to orange for better visibility
+                } else {
+                    pinBackgroundColor = 'red';
+                }
+                const pinElement = new PinElement({
+                    background: pinBackgroundColor,
+                    borderColor: 'grey', 
+                    glyphColor: 'white', 
+                    // glyph: restaurant.avg_rating ? restaurant.avg_rating.toFixed(1) : 'N/A', // Optional: Display rating on pin
                 });
 
-                marker.addListener('click', () => {
+                // 1.c.iii. Instantiate AdvancedMarkerElement
+                const marker = new AdvancedMarkerElement({
+                    map: map,
+                    position: { lat: restaurant.lat, lng: restaurant.lng },
+                    title: restaurant.name,
+                    content: pinElement.element, // Assign PinElement's DOM element
+                    gmpClickable: true, // Explicitly set clickable
+                });
+
+                // 1.d. Verify Click Listener and InfoWindow
+                marker.addListener('click', () => { // Keep using addListener for AdvancedMarkerElement
                     const content = `
                         <div class="info-window-content">
                             <h4>${restaurant.name}</h4>
@@ -211,7 +214,7 @@
                         </div>
                     `;
                     infoWindow.setContent(content);
-                    infoWindow.open(map, marker);
+                    infoWindow.open(map, marker); // Use marker as anchor with AdvancedMarkerElement
                 });
                 markers.push(marker);
             });

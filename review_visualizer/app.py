@@ -77,8 +77,8 @@ def process_review_data(reviews_list):
         else:
             average_restaurant_ratings[name] = 0
     
-    top_pros = pros_counts.most_common(10)
-    top_cons = cons_counts.most_common(10)
+    top_pros = [ (k, v) for k, v in pros_counts.most_common(10) if v > 0 and k is not None and len(k) > 0 and k != "" and k != "empty" ] if pros_counts else []
+    top_cons = [ (k, v) for k, v in cons_counts.most_common(10) if v > 0 and k is not None and len(k) > 0 and k != "" and k != "empty" ] if cons_counts else []
 
     if monthly_ts_data:
         sorted_months = sorted(monthly_ts_data.keys())
@@ -116,7 +116,7 @@ def index():
         # 1.a. Ensure query selects latitude and longitude
         query = """
             SELECT display_name, review_rating, review_pros, review_cons, review_text, review_datetime, latitude, longitude
-            FROM `ml-demo-384110.burger_king_reviews_currated.reviews_pros_cons`
+            FROM `ml-demo-384110.burger_king_reviews_currated_prod.reviews_pros_cons`
         """
         query_job = client.query(query)
         all_reviews_data = [dict(row) for row in query_job.result()]
@@ -196,4 +196,4 @@ def index():
 
 if __name__ == '__main__':
     app.run(debug=True)
-```
+
