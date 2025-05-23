@@ -12,7 +12,9 @@ LOG_FILE = LOG_DIR / "bk_maps.log"
 
 # Google Cloud settings
 PROJECT_ID = os.getenv('GOOGLE_CLOUD_PROJECT')
-API_KEY = os.getenv('GOOGLE_API_KEY')
+API_KEY = os.getenv('GOOGLE_API_KEY', "ADD_GOOGLE_API_KEY")
+
+REVIEW_STRATEGY = os.getenv("REVIEW_STRATEGY", "newest") # 'newest' , 'most_relevant'
 
 # BigQuery settings
 BIGQUERY_DATASET_ID = 'burger_king_reviews_dataset'

@@ -12,7 +12,7 @@ from .config import API_KEY
 from .logger import setup_logger
 
 PLACE_DETAILS_URL = 'https://maps.googleapis.com/maps/api/place/details/json'
-
+SLEEP_DURATION = 0.05
 logger = setup_logger(__name__)
 
 class PlacesClient:
@@ -31,6 +31,8 @@ class PlacesClient:
                 included_type="hamburger_restaurant",
             )
             fieldMask = "*"
+            fieldMask = "places.formattedAddress,places.displayName,places.id,places.location"
+
             response = await self.client.search_text(
                 request=request,
                 metadata=[("x-goog-fieldmask", fieldMask)]
@@ -119,8 +121,8 @@ class PlacesClient:
                         logger.warning(f"No reviews found for {restaurant_name}")
                 
                 if i < len(places_id):
-                    logger.debug("Sleeping for 0.5 seconds to respect API rate limits")
-                    time.sleep(0.5)
+                    logger.debug(f"Sleeping for {SLEEP_DURATION} seconds to respect API rate limits")
+                    time.sleep(SLEEP_DURATION)
                     
             except Exception as e:
                 logger.error(f"Error processing place {place_id}: {str(e)}", exc_info=True)
