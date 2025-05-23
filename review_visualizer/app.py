@@ -112,7 +112,12 @@ def index():
              client = bigquery.Client()
         
         query = """
-            SELECT concat(display_name," ", formatted_address) as display_name, review_rating, review_pros, review_cons, review_text, review_datetime, latitude, longitude
+            SELECT 
+              IF(ENDS_WITH(formatted_address, ', France'),
+    concat(display_name," ", LEFT(formatted_address, LENGTH(formatted_address) - LENGTH(', France'))),
+    concat(display_name," ", formatted_address) ) as display_name,
+            
+            review_rating, review_pros, review_cons, review_text, review_datetime, latitude, longitude
             FROM `ml-demo-384110.burger_king_reviews_currated_prod.reviews_pros_cons`
         """
         query_job = client.query(query)

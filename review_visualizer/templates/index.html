@@ -268,7 +268,7 @@
             {% for review in reviews[:5] %}
                 <div class="review">
                     <h4>{{ review.display_name }}</h4>
-                    <p class="review-meta">Rating: {{ review.review_rating }} | Date: {{ review.review_datetime.strftime('%Y-%m-%d') if review.review_datetime else 'N/A' }}</p>
+                    <p class="review-meta">Rating: {{ review.review_rating }} | Date: {{ review.review_datetime.strftime('%Y-%m-%d - %H:%M:%S') if review.review_datetime else 'N/A' }}</p>
                     {% if review.review_text %}
                         <p>{{ review.review_text }}</p>
                     {% endif %}
