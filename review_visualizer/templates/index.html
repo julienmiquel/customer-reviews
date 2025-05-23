@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Review Visualizer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script> 
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0/dist/chartjs-adapter-moment.min.js"></script>
+
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        h1, h2 { color: #2c3e50; text-align: center; }
+        .filter-container { background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 25px; text-align: center; }
+        .filter-container select, .filter-container button { padding: 10px; border-radius: 4px; border: 1px solid #ccc; margin: 0 5px; }
+        .filter-container button { background-color: #3498db; color: white; cursor: pointer; }
+        .filter-container button:hover { background-color: #2980b9; }
+        .container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-around; margin-bottom: 30px; }
+        .data-section { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex-basis: 45%; min-width: 300px; margin-bottom: 20px;}
+        .full-width-section { flex-basis: 92%; min-width: 300px; }
+        .data-section h3 { margin-top: 0; color: #3498db; text-align: center; }
+        .chart-container { width: 100%; height: 350px; }
+        .review-section { width: 100%; margin-top: 30px; }
+        .review { background-color: #fff; border: 1px solid #ccc; margin-bottom: 20px; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .review h4 { margin-top: 0; color: #16a085; }
+        .review p { margin-bottom: 5px; }
+        .review-meta { font-size: 0.9em; color: #555; }
+        .pros, .cons { margin-top: 10px; }
+        .pros ul, .cons ul { padding-left: 20px; margin: 5px 0; list-style-type: disc; }
+        .pros li { background-color: transparent; padding: 2px; color: #27ae60; }
+        .cons li { background-color: transparent; padding: 2px; color: #c0392b; }
+        .error { background-color: #e74c3c; color: white; padding: 15px; margin-bottom: 20px; border-radius: 5px; text-align: center;}
+        .no-data { text-align: center; color: #7f8c8d; padding: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Burger King Review Dashboard</h1>
+
+    {% if error_message %}
+        <div class="error">{{ error_message }}</div>
+    {% endif %}
+
+    <div class="filter-container">
+        <form method="GET" action="{{ url_for('index') }}">
+            <label for="selected_restaurant_name">Filter by Restaurant:</label>
+            <select name="selected_restaurant_name" id="selected_restaurant_name">
+                <option value="">All Restaurants</option>
+                {% for name in restaurant_names %}
+                    <option value="{{ name }}" {% if name == selected_restaurant_name %}selected{% endif %}>{{ name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit">Apply Filter</button>
+        </form>
+    </div>
+
+    <div class="container">
+        <div class="data-section">
+            <h3>Top 10 Review Pros</h3>
+            {% if top_pros %}
+            <div class="chart-container">
+                <canvas id="prosChart"></canvas>
+            </div>
+            {% else %}
+            <p class="no-data">No pros data available for the current selection.</p>
+            {% endif %}
+        </div>
+
+        <div class="data-section">
+            <h3>Top 10 Review Cons</h3>
+            {% if top_cons %}
+            <div class="chart-container">
+                <canvas id="consChart"></canvas>
+            </div>
+            {% else %}
+            <p class="no-data">No cons data available for the current selection.</p>
+            {% endif %}
+        </div>
+    </div>
+    <div class="container">
+        <div class="data-section full-width-section"> 
+            <h3>Average Restaurant Ratings</h3>
+            {% if average_restaurant_ratings and average_restaurant_ratings|length > 0 %}
+            <div class="chart-container">
+                <canvas id="ratingsChart"></canvas>
+            </div>
+            {% else %}
+            <p class="no-data">No rating data available for the current selection.</p>
+            {% endif %}
+        </div>
+    </div>
+    <div class="container">
+        <div class="data-section full-width-section">
+            <h3>Review Trends Over Time</h3>
+            {% if reviews_over_time_chart_data and reviews_over_time_chart_data.labels and reviews_over_time_chart_data.labels|length > 0 %}
+            <div class="chart-container">
+                <canvas id="timeSeriesChart"></canvas>
+            </div>
+            {% else %}
+            <p class="no-data">No time series data available for the current selection.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const topProsData = {{ top_pros|tojson }};
+            const topConsData = {{ top_cons|tojson }};
+            const averageRatingsData = {{ average_restaurant_ratings|tojson }};
+            const timeSeriesRawData = {{ reviews_over_time_chart_data|tojson }};
+
+            if (topProsData && topProsData.length > 0) {
+                new Chart(document.getElementById('prosChart'), {
+                    type: 'bar',
+                    data: { labels: topProsData.map(item => item[0]), datasets: [{ label: 'Count', data: topProsData.map(item => item[1]), backgroundColor: 'rgba(75, 192, 192, 0.6)', borderColor: 'rgba(75, 192, 192, 1)', borderWidth: 1 }] },
+                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: 'Count' } }, x: { title: { display: true, text: 'Pros' } } }, plugins: { legend: { display: false }, title: { display: true, text: 'Top 10 Review Pros' } } }
+                });
+            }
+
+            if (topConsData && topConsData.length > 0) {
+                new Chart(document.getElementById('consChart'), {
+                    type: 'bar',
+                    data: { labels: topConsData.map(item => item[0]), datasets: [{ label: 'Count', data: topConsData.map(item => item[1]), backgroundColor: 'rgba(255, 99, 132, 0.6)', borderColor: 'rgba(255, 99, 132, 1)', borderWidth: 1 }] },
+                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: 'Count' } }, x: { title: { display: true, text: 'Cons' } } }, plugins: { legend: { display: false }, title: { display: true, text: 'Top 10 Review Cons' } } }
+                });
+            }
+
+            if (averageRatingsData && Object.keys(averageRatingsData).length > 0) {
+                const sortedRatings = Object.entries(averageRatingsData).sort((a, b) => b[1] - a[1]);
+                new Chart(document.getElementById('ratingsChart'), {
+                    type: 'bar',
+                    data: { labels: sortedRatings.map(item => item[0]), datasets: [{ label: 'Average Rating', data: sortedRatings.map(item => item[1]), backgroundColor: 'rgba(54, 162, 235, 0.6)', borderColor: 'rgba(54, 162, 235, 1)', borderWidth: 1 }] },
+                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 5, title: { display: true, text: 'Average Rating (out of 5)' } }, x: { title: { display: true, text: 'Restaurant' } } }, plugins: { legend: { display: false }, title: { display: true, text: 'Average Restaurant Ratings' } } }
+                });
+            }
+
+            if (timeSeriesRawData && timeSeriesRawData.labels && timeSeriesRawData.labels.length > 0) {
+                new Chart(document.getElementById('timeSeriesChart'), {
+                    type: 'line',
+                    data: {
+                        labels: timeSeriesRawData.labels,
+                        datasets: [
+                            { label: 'Number of Reviews', data: timeSeriesRawData.review_counts, borderColor: 'rgba(255, 159, 64, 1)', backgroundColor: 'rgba(255, 159, 64, 0.5)', yAxisID: 'y', tension: 0.1 },
+                            { label: 'Average Rating', data: timeSeriesRawData.average_ratings, borderColor: 'rgba(153, 102, 255, 1)', backgroundColor: 'rgba(153, 102, 255, 0.5)', yAxisID: 'y1', tension: 0.1 }
+                        ]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, stacked: false,
+                        plugins: { title: { display: true, text: 'Review Trends Over Time' }, tooltip: { mode: 'index', intersect: false } },
+                        scales: {
+                            x: { type: 'time', time: { unit: 'month', parser: 'YYYY-MM', displayFormats: { month: 'MMM YYYY' } }, title: { display: true, text: 'Month' } },
+                            y: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'Number of Reviews' }, beginAtZero: true },
+                            y1: { type: 'linear', display: true, position: 'right', title: { display: true, text: 'Average Rating (out of 5)' }, beginAtZero: true, max: 5, grid: { drawOnChartArea: false } }
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+
+    <div class="review-section">
+        <h2>Individual Reviews (Sample for {% if selected_restaurant_name %}{{ selected_restaurant_name }}{% else %}All Restaurants{% endif %})</h2>
+        {% if reviews and reviews|length > 0 %}
+            {% for review in reviews[:5] %}
+                <div class="review">
+                    <h4>{{ review.display_name }}</h4>
+                    <p class="review-meta">Rating: {{ review.review_rating }} | Date: {{ review.review_datetime.strftime('%Y-%m-%d') if review.review_datetime else 'N/A' }}</p>
+                    {% if review.review_text %}
+                        <p>{{ review.review_text }}</p>
+                    {% endif %}
+                    {% if review.review_pros %}
+                    <div class="pros"><strong>Pros:</strong>
+                        {% if review.review_pros is string %}<ul><li>{{ review.review_pros }}</li></ul>
+                        {% else %}<ul>{% for pro in review.review_pros %}<li>{{ pro }}</li>{% endfor %}</ul>{% endif %}
+                    </div>
+                    {% endif %}
+                    {% if review.review_cons %}
+                    <div class="cons"><strong>Cons:</strong>
+                        {% if review.review_cons is string %}<ul><li>{{ review.review_cons }}</li></ul>
+                        {% else %}<ul>{% for con in review.review_cons %}<li>{{ con }}</li>{% endfor %}</ul>{% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        {% else %}
+            <p class="no-data">No individual reviews to display for the current selection.</p>
+        {% endif %}
+    </div>
+</body>
+</html>
