@@ -5,6 +5,7 @@ from datetime import datetime
 import json 
 
 app = Flask(__name__)
+debug_mode = False
 
 def augment_reviews_with_ui_name_globally(reviews_raw_list):
     name_to_cities = {}
@@ -38,20 +39,26 @@ def process_review_data(reviews_list):
     restaurant_ratings_agg = {}
     monthly_ts_data = {}
 
-    for review in reviews_list: 
+    print(f"Processing {len(reviews_list)} reviews" )
+
+
+    for review in reviews_list:
         if review.get('review_pros'):
-            # ... (pros processing logic as before) ...
-            if isinstance(review['review_pros'], str): pros_counts[review['review_pros'].strip().lower()] += 1
-            elif isinstance(review['review_pros'], list): 
-                for pro in review['review_pros']: 
-                    if pro: pros_counts[pro.strip().lower()] += 1
+            if isinstance(review['review_pros'], str):
+                pros_counts[review['review_pros'].strip().lower()] += 1
+            elif isinstance(review['review_pros'], list):
+                for pro in review['review_pros']:
+                    if pro:
+                        pros_counts[pro.strip().lower()] += 1
         
         if review.get('review_cons'):
-            # ... (cons processing logic as before) ...
-            if isinstance(review['review_cons'], str): cons_counts[review['review_cons'].strip().lower()] += 1
+            if isinstance(review['review_cons'], str):
+                cons_counts[review['review_cons'].strip().lower()] += 1
             elif isinstance(review['review_cons'], list):
                 for con in review['review_cons']:
-                    if con: cons_counts[con.strip().lower()] += 1
+                    if con:
+                        cons_counts[con.strip().lower()] += 1
+
 
         ui_name = review.get('ui_display_name') 
         review_rating = review.get('review_rating')
@@ -80,8 +87,8 @@ def process_review_data(reviews_list):
     for name_key, data in restaurant_ratings_agg.items(): 
         average_restaurant_ratings[name_key] = round(data['total_rating'] / data['count'], 2) if data['count'] > 0 else 0
     
-    top_pros = pros_counts.most_common(10)
-    top_cons = cons_counts.most_common(10)
+    top_pros =  [ (k, v) for k, v in pros_counts.most_common(10) if v > 0 and k is not None and len(k) > 0 and k != ""] if pros_counts else []
+    top_cons = [ (k, v) for k, v in cons_counts.most_common(10) if v > 0 and k is not None and len(k) > 0 and k != ""] if cons_counts else []
 
     if monthly_ts_data:
         sorted_months = sorted(monthly_ts_data.keys())
@@ -97,9 +104,52 @@ def get_and_augment_all_reviews():
     try:
         bq_client_config = app.config.get('BIGQUERY_CLIENT')
         client = bq_client_config if bq_client_config is not None else bigquery.Client()
-        query = "SELECT display_name, review_rating, review_pros, review_cons, review_text, review_datetime, latitude, longitude, city FROM `ml-demo-384110.burger_king_reviews_currated.reviews_pros_cons`"
+        query = """
+        SELECT 
+                        IF(ENDS_WITH(formatted_address, ', France'),
+    concat(display_name," ", LEFT(formatted_address, LENGTH(formatted_address) - LENGTH(', France'))),
+    concat(display_name," ", formatted_address) ) as display_name,
+
+            review_rating,
+            review_pros,
+            review_cons,
+            review_text,
+            review_datetime,
+            latitude,
+            longitude,
+            formatted_address as city,
+            -- Add these fields to help diagnose
+            CASE 
+                WHEN latitude IS NULL THEN 'NULL latitude'
+                WHEN longitude IS NULL THEN 'NULL longitude'
+                WHEN NOT (latitude BETWEEN -90 AND 90) THEN 'Invalid latitude range'
+                WHEN NOT (longitude BETWEEN -180 AND 180) THEN 'Invalid longitude range'
+                ELSE 'Valid coordinates'
+            END as coordinate_status
+        FROM `ml-demo-384110.burger_king_reviews_currated_prod.reviews_pros_cons`
+        """
         query_job = client.query(query)
         all_reviews_data_raw = [dict(row) for row in query_job.result()]
+        print(f"Loaded {len(all_reviews_data_raw)} reviews from BigQuery")
+        
+        # Print coordinate status summary
+        coord_status_counts = {}
+        for row in all_reviews_data_raw:
+            status = row.get('coordinate_status', 'Unknown')
+            coord_status_counts[status] = coord_status_counts.get(status, 0) + 1
+        if debug_mode:
+            print("\nCoordinate Status Summary:")
+            for status, count in coord_status_counts.items():
+                print(f"{status}: {count}")
+                
+                
+            # Print sample of coordinate values
+            print("\nSample of coordinate values (first 5 records):")
+            for i, row in enumerate(all_reviews_data_raw[:5]):
+                print(f"Record {i+1}:")
+                print(f"  Latitude: {row.get('latitude')} (type: {type(row.get('latitude'))})")
+                print(f"  Longitude: {row.get('longitude')} (type: {type(row.get('longitude'))})")
+            
     except Exception as e:
         print(f"Error fetching data from BigQuery: {e}")
         return [] 
@@ -120,12 +170,47 @@ def index():
     # Prepare map data (always all unique restaurants with valid lat/lng)
     unique_restaurants_info_map = {}
     if all_reviews_data_augmented:
+        # First, collect all unique restaurant names
+        unique_restaurant_names = set()
+        restaurants_with_coords = set()
+        coord_errors = []
+        
+        if debug_mode:
+        # Print sample of restaurant names
+            print("\nSample of restaurant names (first 10 records):")
+            for i, review in enumerate(all_reviews_data_augmented[:10]):
+                print(f"Record {i+1}:")
+                print(f"  Display name: {review.get('display_name')}")
+                print(f"  UI display name: {review.get('ui_display_name')}")
+                print(f"  City: {review.get('city')}")
+        
         for review in all_reviews_data_augmented: 
             original_name = review.get('display_name') 
-            lat, lng = review.get('latitude'), review.get('longitude')
-            if original_name and original_name not in unique_restaurants_info_map and lat is not None and lng is not None:
-                try: unique_restaurants_info_map[original_name] = {'lat': float(lat), 'lng': float(lng)}
-                except (ValueError, TypeError): pass
+            if original_name:
+                unique_restaurant_names.add(original_name)
+                lat, lng = review.get('latitude'), review.get('longitude')
+                if lat is not None and lng is not None:
+                    try: 
+                        lat_float = float(lat)
+                        lng_float = float(lng)
+                        if -90 <= lat_float <= 90 and -180 <= lng_float <= 180:
+                            unique_restaurants_info_map[original_name] = {'lat': lat_float, 'lng': lng_float}
+                            restaurants_with_coords.add(original_name)
+                        else:
+                            coord_errors.append(f"Invalid range for {original_name}: lat={lat_float}, lng={lng_float}")
+                    except (ValueError, TypeError) as e:
+                        coord_errors.append(f"Conversion error for {original_name}: lat={lat}, lng={lng}, error={str(e)}")
+        if debug_mode:
+            print(f"\nTotal unique restaurants: {len(unique_restaurant_names)}")
+            print(f"Restaurants with valid coordinates: {len(restaurants_with_coords)}")
+            print(f"Restaurants missing coordinates: {len(unique_restaurant_names) - len(restaurants_with_coords)}")
+            print("\nUnique restaurant names:")
+            for name in sorted(unique_restaurant_names):
+                print(f"  {name}")
+            if coord_errors:
+                print("\nCoordinate errors (first 5):")
+                for error in coord_errors[:5]:
+                    print(f"  {error}")
         
         city_names_for_initial_filter = sorted(list(set(review['city'] for review in all_reviews_data_augmented if review.get('city'))))
 
@@ -144,18 +229,18 @@ def index():
 
     # Initial filtering for dashboard display based on query params
     current_reviews_for_dashboard = all_reviews_data_augmented
-    if selected_city_filter:
-        current_reviews_for_dashboard = [r for r in current_reviews_for_dashboard if r.get('city') == selected_city_filter]
+    # if selected_city_filter:
+    #     current_reviews_for_dashboard = [r for r in current_reviews_for_dashboard if r.get('city') == selected_city_filter]
     
     restaurant_names_for_initial_dropdown = sorted(list(set(r['ui_display_name'] for r in current_reviews_for_dashboard if r.get('ui_display_name')))) if selected_city_filter else sorted(list(set(r['ui_display_name'] for r in all_reviews_data_augmented if r.get('ui_display_name'))))
 
-    if selected_restaurant_name_ui: 
-        current_reviews_for_dashboard = [r for r in current_reviews_for_dashboard if r.get('ui_display_name') == selected_restaurant_name_ui]
+    # if selected_restaurant_name_ui: 
+    #     current_reviews_for_dashboard = [r for r in current_reviews_for_dashboard if r.get('ui_display_name') == selected_restaurant_name_ui]
 
     top_pros, top_cons, avg_ratings_display, time_chart_data = process_review_data(current_reviews_for_dashboard)
     
     return render_template('index.html', 
-                           reviews=current_reviews_for_dashboard[:5], # Sample of reviews for display
+                           reviews=current_reviews_for_dashboard, # Sample of reviews for display
                            top_pros=top_pros, top_cons=top_cons,
                            average_restaurant_ratings=avg_ratings_display, 
                            reviews_over_time_chart_data=time_chart_data,
@@ -232,4 +317,3 @@ def update_dashboard_by_map_bounds():
 
 if __name__ == '__main__':
     app.run(debug=True)
-```
