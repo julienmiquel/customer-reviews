@@ -1,0 +1,14 @@
+config {
+    type: "assertion",
+    description: "Data quality checks for reviews and locations data"
+}
+
+-- Check for duplicate reviews
+SELECT
+    place_id,
+    review_datetime,
+    author,
+    COUNT(*) as review_count
+FROM ${ref("reviews_view")}
+GROUP BY place_id, review_datetime, author
+HAVING COUNT(*) > 1

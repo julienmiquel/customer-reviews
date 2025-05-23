@@ -1,11 +1,26 @@
 config {
     type: "incremental",
-    name: "reviews_pros_cons" ,
-    description : "Review analyzed by Gemini model."
+    name: "reviews_pros_cons",
+    description: "Review analysis using Gemini model to extract pros, cons, and improvement suggestions",
+    materialized: true,
+    uniqueKey: ["place_id", "review_datetime"],
+    dependencies: ["reviews_view"],
+    columns: {
+        review_pros: "Array of positive aspects identified in reviews",
+        review_cons: "Array of negative aspects identified in reviews",
+        review_description: "Detailed analysis of the reviews",
+        place_id: "Unique identifier for the location",
+        formatted_address: "Full address of the location",
+        display_name: "Name of the location",
+        overall_rating: "Average rating of the location",
+        total_ratings: "Total number of ratings",
+        review_rating: "Individual review rating",
+        review_datetime: "Timestamp of the review",
+        longitude: "Longitude coordinate",
+        latitude: "Latitude coordinate"
+    }
 }
 
--- ,"bigquery","tags","uniqueKey","dependencies","hermetic","schema","assertions","database","columns","description","materialized","dependOnDependencyAssertions"]
---CREATE OR REPLACE TABLE `ml-demo-384110.burger_king_reviews_currated.reviews_gemini` as 
 SELECT
 #  ml_response.ml_generate_text_llm_result AS generated_description,
   review_pros,
