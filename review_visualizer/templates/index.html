@@ -7,25 +7,43 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script> 
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0/dist/chartjs-adapter-moment.min.js"></script>
-    <!-- Ensure API key is provided and libraries=marker is included for AdvancedMarkerElement -->
     <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCEhbTSzY2JF818fyKx6I4VpzMuAOav_8w&callback=initMap&libraries=marker,places"></script> 
 
     <style>
         body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
         h1, h2 { color: #2c3e50; text-align: center; }
+        /* 1.a. Style for loading indicator (can be improved) */
+        #loadingIndicator {
+            display: none; /* Initially hidden */
+            position: fixed; /* Overlay */
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            z-index: 1000; /* Ensure it's on top */
+            border: 1px solid #ccc;
+            font-size: 1.2em;
+        }
+        .stats-container { background-color: #fff; padding: 10px 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 15px; text-align: center; font-size: 0.9em; color: #555;}
+        .stats-container p { display: inline-block; margin: 0 15px; }
         .filter-container { background-color: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 25px; text-align: center; }
-        .filter-container select, .filter-container button { padding: 10px; border-radius: 4px; border: 1px solid #ccc; margin: 0 5px; }
+        .filter-container label { margin-right: 5px; }
+        .filter-container select, .filter-container button { padding: 10px; border-radius: 4px; border: 1px solid #ccc; margin: 5px 10px 5px 0; } 
         .filter-container button { background-color: #3498db; color: white; cursor: pointer; }
         .filter-container button:hover { background-color: #2980b9; }
         .container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-around; margin-bottom: 30px; }
         .data-section { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex-basis: 45%; min-width: 300px; margin-bottom: 20px;}
         .full-width-section { flex-basis: 92%; min-width: 300px; }
         .data-section h3 { margin-top: 0; color: #3498db; text-align: center; }
-        .chart-container { width: 100%; height: 350px; }
+        .chart-container { width: 100%; height: 350px; position: relative; } 
+        .chart-no-data-message { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #7f8c8d; font-size: 1em; }
         #map { height: 500px; width: 100%; background-color: #e0e0e0; } 
         .review-section { width: 100%; margin-top: 30px; }
         .review { background-color: #fff; border: 1px solid #ccc; margin-bottom: 20px; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .review h4 { margin-top: 0; color: #16a085; }
+        .review h4 { margin-top: 0; color: #16a085; } 
         .review p { margin-bottom: 5px; }
         .review-meta { font-size: 0.9em; color: #555; }
         .pros, .cons { margin-top: 10px; }
@@ -33,8 +51,7 @@
         .pros li { background-color: transparent; padding: 2px; color: #27ae60; }
         .cons li { background-color: transparent; padding: 2px; color: #c0392b; }
         .error { background-color: #e74c3c; color: white; padding: 15px; margin-bottom: 20px; border-radius: 5px; text-align: center;}
-        .no-data { text-align: center; color: #7f8c8d; padding: 20px; }
-         /* Styles for InfoWindow content */
+        .no-data { text-align: center; color: #7f8c8d; padding: 20px; } 
         .gm-style .gm-style-iw-c { padding: 10px !important; }
         .gm-style .gm-style-iw-d { overflow: auto !important; }
         .info-window-content h4 { margin: 0 0 5px 0; color: #333; }
@@ -42,236 +59,291 @@
     </style>
 </head>
 <body>
+    <!-- 1.a. Add loading indicator element -->
+    <div id="loadingIndicator">Loading data...</div>
+
     <h1>Burger King Review Dashboard</h1>
 
     {% if error_message %}
         <div class="error">{{ error_message }}</div>
     {% endif %}
 
+    <div class="stats-container">
+        <p>Reviews Displayed: <strong id="totalDisplayedReviews">{{ total_displayed_reviews if total_displayed_reviews is defined else 'N/A' }}</strong></p>
+        <p>Total Cities with Reviews: <strong id="totalDistinctCities">{{ total_distinct_cities if total_distinct_cities is defined else 'N/A' }}</strong></p>
+    </div>
+
     <div class="filter-container">
-        <form method="GET" action="{{ url_for('index') }}">
+        <form id="filterForm" method="GET" action="{{ url_for('index') }}">
+            <label for="selected_city">Filter by City:</label>
+            <select name="selected_city" id="selected_city">
+                <option value="">All Cities</option>
+                {% for city in city_names %}
+                    <option value="{{ city }}" {% if city == selected_city %}selected{% endif %}>{{ city }}</option>
+                {% endfor %}
+            </select>
+
             <label for="selected_restaurant_name">Filter by Restaurant:</label>
             <select name="selected_restaurant_name" id="selected_restaurant_name">
                 <option value="">All Restaurants</option>
-                {% for name in restaurant_names %}
+                {% for name in restaurant_names %} 
                     <option value="{{ name }}" {% if name == selected_restaurant_name %}selected{% endif %}>{{ name }}</option>
                 {% endfor %}
             </select>
-            <button type="submit">Apply Filter</button>
+            <button type="submit">Apply Filters</button> 
         </form>
     </div>
 
     <div class="container">
         <div class="data-section full-width-section" id="map-container-wrapper">
             <h3>Restaurant Performance Map</h3>
-            <div id="map"></div> <!-- Map will be initialized here -->
+            <div id="map"></div>
         </div>
     </div>
 
     <div class="container">
         <div class="data-section">
             <h3>Top 10 Review Pros</h3>
-            {% if top_pros %}
-            <div class="chart-container">
+            <div class="chart-container" id="prosChartContainer">
                 <canvas id="prosChart"></canvas>
+                <p class="chart-no-data-message no-data" style="display:none;">No pros data for this view.</p>
             </div>
-            {% else %}
-            <p class="no-data">No pros data available for the current selection.</p>
-            {% endif %}
         </div>
-
         <div class="data-section">
             <h3>Top 10 Review Cons</h3>
-            {% if top_cons %}
-            <div class="chart-container">
+            <div class="chart-container" id="consChartContainer">
                 <canvas id="consChart"></canvas>
+                <p class="chart-no-data-message no-data" style="display:none;">No cons data for this view.</p>
             </div>
-            {% else %}
-            <p class="no-data">No cons data available for the current selection.</p>
-            {% endif %}
         </div>
     </div>
     <div class="container">
         <div class="data-section full-width-section"> 
             <h3>Average Restaurant Ratings</h3>
-            {% if average_restaurant_ratings and average_restaurant_ratings|length > 0 %}
-            <div class="chart-container">
+            <div class="chart-container" id="ratingsChartContainer">
                 <canvas id="ratingsChart"></canvas>
+                 <p class="chart-no-data-message no-data" style="display:none;">No rating data for this view.</p>
             </div>
-            {% else %}
-            <p class="no-data">No rating data available for the current selection.</p>
-            {% endif %}
         </div>
     </div>
     <div class="container">
         <div class="data-section full-width-section">
             <h3>Review Trends Over Time</h3>
-            {% if reviews_over_time_chart_data and reviews_over_time_chart_data.labels and reviews_over_time_chart_data.labels|length > 0 %}
-            <div class="chart-container">
+            <div class="chart-container" id="timeSeriesChartContainer">
                 <canvas id="timeSeriesChart"></canvas>
+                <p class="chart-no-data-message no-data" style="display:none;">No time series data for this view.</p>
             </div>
-            {% else %}
-            <p class="no-data">No time series data available for the current selection.</p>
-            {% endif %}
         </div>
     </div>
 
     <script>
-        const restaurantsMapData = {{ restaurants_map_data|tojson }};
+        const initialRestaurantsMapData = {{ restaurants_map_data|tojson }};
+        let prosChartInstance, consChartInstance, ratingsChartInstance, timeSeriesChartInstance;
+        let googleMapInstance; 
 
-        async function initMap() { // 1.a. Make initMap async
-            const mapElement = document.getElementById("map");
+        function debounce(func, delay) {
+            let timeout;
+            return function(...args) { clearTimeout(timeout); timeout = setTimeout(() => func.apply(this, args), delay); };
+        }
+        
+        function updateChart(chartInstance, chartData, chartType = 'bar') {
+            const chartContainer = chartInstance.canvas.parentElement;
+            const noDataMessage = chartContainer.querySelector('.chart-no-data-message');
+            const canvas = chartInstance.canvas;
 
-            if (!mapElement) {
-                console.error("Map element not found!");
-                return;
-            }
-            if (!google || !google.maps || !google.maps.importLibrary) { // Check for importLibrary
-                console.error("Google Maps API or importLibrary not loaded!");
-                mapElement.innerHTML = '<p class="no-data">Error: Google Maps API failed to load.</p>';
+            if (!chartData || (Array.isArray(chartData) && chartData.length === 0) || (typeof chartData === 'object' && Object.keys(chartData).length === 0 && !Array.isArray(chartData)) || (chartType === 'line' && (!chartData.labels || chartData.labels.length === 0))) {
+                chartInstance.data.labels = [];
+                if (chartInstance.data.datasets) { chartInstance.data.datasets.forEach(dataset => dataset.data = []); }
+                chartInstance.update();
+                if (noDataMessage) noDataMessage.style.display = 'block';
+                if (canvas) canvas.style.display = 'none';
                 return;
             }
             
-            // 1.a. Import AdvancedMarkerElement and PinElement
+            if (noDataMessage) noDataMessage.style.display = 'none';
+            if (canvas) canvas.style.display = 'block';
+
+            if (chartType === 'bar') {
+                if (Array.isArray(chartData) && chartData.every(item => Array.isArray(item) && item.length === 2)) {
+                    chartInstance.data.labels = chartData.map(item => item[0]);
+                    chartInstance.data.datasets[0].data = chartData.map(item => item[1]);
+                } else if (typeof chartData === 'object' && !Array.isArray(chartData)) {
+                    const sortedData = Object.entries(chartData).sort((a, b) => b[1] - a[1]);
+                    chartInstance.data.labels = sortedData.map(item => item[0]);
+                    chartInstance.data.datasets[0].data = sortedData.map(item => item[1]);
+                }
+            } else if (chartType === 'line') { 
+                chartInstance.data.labels = chartData.labels;
+                chartInstance.data.datasets[0].data = chartData.review_counts;
+                chartInstance.data.datasets[1].data = chartData.average_ratings;
+            }
+            chartInstance.update();
+        }
+
+        // 2.a. Modify fetchFilteredDashboardData
+        function fetchFilteredDashboardData(bounds, city, restaurantName) {
+            // 2.a.i. Show Indicator
+            document.getElementById('loadingIndicator').style.display = 'block';
+
+            const params = new URLSearchParams();
+            if (bounds) { 
+                const ne = bounds.getNorthEast();
+                const sw = bounds.getSouthWest();
+                params.append('ne_lat', ne.lat());
+                params.append('ne_lng', ne.lng());
+                params.append('sw_lat', sw.lat());
+                params.append('sw_lng', sw.lng());
+            }
+            if (city) params.append('selected_city', city);
+            if (restaurantName) params.append('selected_restaurant_name', restaurantName);
+            
+            const url = `/update_dashboard_by_map_bounds?${params.toString()}`;
+            console.log('Fetching filtered dashboard data:', url);
+
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
+                    return response.json();
+                })
+                .then(data => { 
+                    console.log('Data from backend for dashboard update:', data);
+                    document.getElementById('totalDisplayedReviews').textContent = data.total_displayed_reviews !== undefined ? data.total_displayed_reviews : 'N/A';
+                    if (prosChartInstance) updateChart(prosChartInstance, data.top_pros, 'bar');
+                    if (consChartInstance) updateChart(consChartInstance, data.top_cons, 'bar');
+                    if (ratingsChartInstance) updateChart(ratingsChartInstance, data.average_restaurant_ratings, 'bar');
+                    if (timeSeriesChartInstance) updateChart(timeSeriesChartInstance, data.reviews_over_time_chart_data, 'line');
+                    updateFilterDropdown('selected_city', data.city_names_for_dropdown, city); 
+                    updateFilterDropdown('selected_restaurant_name', data.restaurant_names_for_dropdown, restaurantName);
+                })
+                .catch(error => { 
+                    console.error('Error fetching filtered dashboard data:', error);
+                    // Optionally, display a more user-friendly error message on the page
+                })
+                .finally(() => { // 2.a.ii. Hide Indicator (in both success and error paths)
+                    document.getElementById('loadingIndicator').style.display = 'none';
+                });
+        }
+        
+        const debouncedFetchFilteredDashboardData = debounce(fetchFilteredDashboardData, 750);
+
+        function updateFilterDropdown(dropdownId, optionsArray, currentSelection) {
+            const selectElement = document.getElementById(dropdownId);
+            if (!selectElement) return;
+            const currentClientSelectedValue = selectElement.value; 
+            let valueToPreserve = "";
+            if (optionsArray.includes(currentClientSelectedValue)) {
+                valueToPreserve = currentClientSelectedValue;
+            } else if (optionsArray.includes(currentSelection)) { 
+                valueToPreserve = currentSelection;
+            }
+            while (selectElement.options.length > 1) { selectElement.remove(1); }
+            optionsArray.forEach(optionValue => {
+                const option = new Option(optionValue, optionValue);
+                selectElement.add(option);
+            });
+            if (valueToPreserve) { 
+                selectElement.value = valueToPreserve;
+            } else { 
+                 selectElement.value = "";
+            }
+        }
+
+        async function initMap() { 
+            const mapElement = document.getElementById("map");
+            if (!mapElement) return;
+            if (!google || !google.maps || !google.maps.importLibrary) { 
+                mapElement.innerHTML = '<p class="no-data">Error: Google Maps API failed to load.</p>'; return;
+            }
             const { AdvancedMarkerElement, PinElement } = await google.maps.importLibrary("marker");
 
-            if (!restaurantsMapData || restaurantsMapData.length === 0) {
-                mapElement.innerHTML = '<p class="no-data">No restaurant location data available to display on map.</p>';
-                console.log("No restaurant data for map.");
-                return;
+            if (!initialRestaurantsMapData || initialRestaurantsMapData.length === 0) {
+                mapElement.innerHTML = '<p class="no-data">No restaurant location data to display on map.</p>'; return;
             }
-
-            let mapCenter = { lat: 40.7128, lng: -74.0060 }; 
-            let initialZoom = 4; 
-
-            let totalLat = 0;
-            let totalLng = 0;
-            let validCoordsCount = 0;
-            restaurantsMapData.forEach(r => {
-                if (typeof r.lat === 'number' && typeof r.lng === 'number') {
-                    totalLat += r.lat;
-                    totalLng += r.lng;
-                    validCoordsCount++;
-                }
+            let mapCenter = { lat: 40.7128, lng: -74.0060 }, initialZoom = 4;
+            let totalLat = 0, totalLng = 0, validCoordsCount = 0;
+            initialRestaurantsMapData.forEach(r => {
+                if (typeof r.lat === 'number' && typeof r.lng === 'number') { totalLat += r.lat; totalLng += r.lng; validCoordsCount++; }
             });
-
-            if (validCoordsCount > 0) {
-                mapCenter = { lat: totalLat / validCoordsCount, lng: totalLng / validCoordsCount };
-                initialZoom = 6; 
-            }
-             if (validCoordsCount === 1 && restaurantsMapData.length ===1 ) { 
-                mapCenter = { lat: restaurantsMapData[0].lat, lng: restaurantsMapData[0].lng };
-                initialZoom = 12;
-            }
-
-            const map = new google.maps.Map(mapElement, {
-                zoom: initialZoom,
-                center: mapCenter,
-                mapId: 'DEMO_MAP_ID' // 1.b. Add mapId
+            if (validCoordsCount > 0) { mapCenter = { lat: totalLat / validCoordsCount, lng: totalLng / validCoordsCount }; initialZoom = 6; }
+            if (validCoordsCount === 1 && initialRestaurantsMapData.length ===1 ) { mapCenter = { lat: initialRestaurantsMapData[0].lat, lng: initialRestaurantsMapData[0].lng }; initialZoom = 12; }
+            
+            googleMapInstance = new google.maps.Map(mapElement, { zoom: initialZoom, center: mapCenter, mapId: 'DEMO_MAP_ID' });
+            
+            googleMapInstance.addListener('idle', () => { 
+                const selectedCity = document.getElementById('selected_city').value;
+                const selectedRestaurant = document.getElementById('selected_restaurant_name').value;
+                debouncedFetchFilteredDashboardData(googleMapInstance.getBounds(), selectedCity, selectedRestaurant);
             });
-
+            
             const infoWindow = new google.maps.InfoWindow();
-            const markers = [];
-
-            restaurantsMapData.forEach(restaurant => {
-                if (typeof restaurant.lat !== 'number' || typeof restaurant.lng !== 'number') {
-                    console.warn(`Skipping restaurant with invalid lat/lng: ${restaurant.name}`);
-                    return; 
-                }
-
-                // 1.c.ii. Create PinElement for Styling
-                let pinBackgroundColor;
-                if (restaurant.avg_rating >= 4.0) {
-                    pinBackgroundColor = 'green';
-                } else if (restaurant.avg_rating >= 3.0) {
-                    pinBackgroundColor = 'orange'; // Changed yellow to orange for better visibility
-                } else {
-                    pinBackgroundColor = 'red';
-                }
-                const pinElement = new PinElement({
-                    background: pinBackgroundColor,
-                    borderColor: 'grey', 
-                    glyphColor: 'white', 
-                    // glyph: restaurant.avg_rating ? restaurant.avg_rating.toFixed(1) : 'N/A', // Optional: Display rating on pin
+            initialRestaurantsMapData.forEach(restaurant => {
+                if (typeof restaurant.lat !== 'number' || typeof restaurant.lng !== 'number') return; 
+                let pinBg;
+                if (restaurant.avg_rating >= 4.0) pinBg = 'green'; else if (restaurant.avg_rating >= 3.0) pinBg = 'orange'; else pinBg = 'red';
+                const pin = new PinElement({ background: pinBg, borderColor: 'grey', glyphColor: 'white' });
+                const marker = new AdvancedMarkerElement({ map: googleMapInstance, position: { lat: restaurant.lat, lng: restaurant.lng }, title: restaurant.name, content: pin.element, gmpClickable: true });
+                marker.addListener('click', () => {
+                    infoWindow.setContent(`<div class="info-window-content"><h4>${restaurant.name}</h4><p><strong>Avg. Rating:</strong> ${restaurant.avg_rating ? restaurant.avg_rating.toFixed(1) : 'N/A'} ★</p><p><strong>Total Reviews:</strong> ${restaurant.review_count !== undefined ? restaurant.review_count : 'N/A'}</p></div>`);
+                    infoWindow.open(googleMapInstance, marker); 
                 });
-
-                // 1.c.iii. Instantiate AdvancedMarkerElement
-                const marker = new AdvancedMarkerElement({
-                    map: map,
-                    position: { lat: restaurant.lat, lng: restaurant.lng },
-                    title: restaurant.name,
-                    content: pinElement.element, // Assign PinElement's DOM element
-                    gmpClickable: true, // Explicitly set clickable
-                });
-
-                // 1.d. Verify Click Listener and InfoWindow
-                marker.addListener('click', () => { // Keep using addListener for AdvancedMarkerElement
-                    const content = `
-                        <div class="info-window-content">
-                            <h4>${restaurant.name}</h4>
-                            <p><strong>Avg. Rating:</strong> ${restaurant.avg_rating ? restaurant.avg_rating.toFixed(1) : 'N/A'} ★</p>
-                            <p><strong>Total Reviews:</strong> ${restaurant.review_count !== undefined ? restaurant.review_count : 'N/A'}</p>
-                        </div>
-                    `;
-                    infoWindow.setContent(content);
-                    infoWindow.open(map, marker); // Use marker as anchor with AdvancedMarkerElement
-                });
-                markers.push(marker);
             });
         }
 
-
         document.addEventListener('DOMContentLoaded', function () {
-            // Chart.js logic (remains the same)
-            const topProsData = {{ top_pros|tojson }};
-            const topConsData = {{ top_cons|tojson }};
-            const averageRatingsData = {{ average_restaurant_ratings|tojson }};
-            const timeSeriesRawData = {{ reviews_over_time_chart_data|tojson }};
+            const initialTopProsData = {{ top_pros|tojson }};
+            const initialTopConsData = {{ top_cons|tojson }};
+            const initialAverageRatingsData = {{ average_restaurant_ratings|tojson }}; 
+            const initialTimeSeriesRawData = {{ reviews_over_time_chart_data|tojson }};
 
-            if (topProsData && topProsData.length > 0) {
-                new Chart(document.getElementById('prosChart'), {
-                    type: 'bar', data: { labels: topProsData.map(item => item[0]), datasets: [{ label: 'Count', data: topProsData.map(item => item[1]), backgroundColor: 'rgba(75, 192, 192, 0.6)', borderColor: 'rgba(75, 192, 192, 1)', borderWidth: 1 }] },
-                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: 'Count' } }, x: { title: { display: true, text: 'Pros' } } }, plugins: { legend: { display: false }, title: { display: true, text: 'Top 10 Review Pros' } } }
-                });
-            } else { document.getElementById('prosChart').parentElement.innerHTML = '<p class="no-data">No pros data available for the current selection.</p>';}
+            if (initialTopProsData && initialTopProsData.length > 0) {
+                prosChartInstance = new Chart(document.getElementById('prosChart'), { data: { labels: initialTopProsData.map(item => item[0]), datasets: [{ label: 'Count', data: initialTopProsData.map(item => item[1]), backgroundColor: 'rgba(75, 192, 192, 0.6)', borderColor: 'rgba(75, 192, 192, 1)', borderWidth: 1 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: 'Count' } }, x: { title: { display: true, text: 'Pros' } } }, plugins: { legend: { display: false }, title: { display: true, text: 'Top 10 Review Pros' } } }});
+                document.getElementById('prosChart').style.display = 'block'; document.querySelector('#prosChartContainer .chart-no-data-message').style.display = 'none';
+            } else { document.querySelector('#prosChartContainer .chart-no-data-message').style.display = 'block'; document.getElementById('prosChart').style.display = 'none';}
 
+            if (initialTopConsData && initialTopConsData.length > 0) {
+                consChartInstance = new Chart(document.getElementById('consChart'), { data: { labels: initialTopConsData.map(item => item[0]), datasets: [{ label: 'Count', data: initialTopConsData.map(item => item[1]), backgroundColor: 'rgba(255, 99, 132, 0.6)', borderColor: 'rgba(255, 99, 132, 1)', borderWidth: 1 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: 'Count' } }, x: { title: { display: true, text: 'Cons' } } }, plugins: { legend: { display: false }, title: { display: true, text: 'Top 10 Review Cons' } } }});
+                document.getElementById('consChart').style.display = 'block'; document.querySelector('#consChartContainer .chart-no-data-message').style.display = 'none';
+            } else { document.querySelector('#consChartContainer .chart-no-data-message').style.display = 'block'; document.getElementById('consChart').style.display = 'none';}
 
-            if (topConsData && topConsData.length > 0) {
-                new Chart(document.getElementById('consChart'), {
-                    type: 'bar', data: { labels: topConsData.map(item => item[0]), datasets: [{ label: 'Count', data: topConsData.map(item => item[1]), backgroundColor: 'rgba(255, 99, 132, 0.6)', borderColor: 'rgba(255, 99, 132, 1)', borderWidth: 1 }] },
-                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: 'Count' } }, x: { title: { display: true, text: 'Cons' } } }, plugins: { legend: { display: false }, title: { display: true, text: 'Top 10 Review Cons' } } }
-                });
-            } else { document.getElementById('consChart').parentElement.innerHTML = '<p class="no-data">No cons data available for the current selection.</p>';}
+            if (initialAverageRatingsData && Object.keys(initialAverageRatingsData).length > 0) {
+                const sortedRatings = Object.entries(initialAverageRatingsData).sort((a, b) => b[1] - a[1]);
+                ratingsChartInstance = new Chart(document.getElementById('ratingsChart'), { data: { labels: sortedRatings.map(item => item[0]), datasets: [{ label: 'Average Rating', data: sortedRatings.map(item => item[1]), backgroundColor: 'rgba(54, 162, 235, 0.6)', borderColor: 'rgba(54, 162, 235, 1)', borderWidth: 1 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 5, title: { display: true, text: 'Average Rating (out of 5)' } }, x: { title: { display: true, text: 'Restaurant' } } }, plugins: { legend: { display: false }, title: { display: true, text: 'Average Restaurant Ratings' } } }});
+                document.getElementById('ratingsChart').style.display = 'block'; document.querySelector('#ratingsChartContainer .chart-no-data-message').style.display = 'none';
+            } else { document.querySelector('#ratingsChartContainer .chart-no-data-message').style.display = 'block'; document.getElementById('ratingsChart').style.display = 'none';}
 
+            if (initialTimeSeriesRawData && initialTimeSeriesRawData.labels && initialTimeSeriesRawData.labels.length > 0) {
+                timeSeriesChartInstance = new Chart(document.getElementById('timeSeriesChart'), { data: { labels: initialTimeSeriesRawData.labels, datasets: [ { label: 'Number of Reviews', data: initialTimeSeriesRawData.review_counts, borderColor: 'rgba(255, 159, 64, 1)', backgroundColor: 'rgba(255, 159, 64, 0.5)', yAxisID: 'y', tension: 0.1 }, { label: 'Average Rating', data: initialTimeSeriesRawData.average_ratings, borderColor: 'rgba(153, 102, 255, 1)', backgroundColor: 'rgba(153, 102, 255, 0.5)', yAxisID: 'y1', tension: 0.1 } ] }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, stacked: false, plugins: { title: { display: true, text: 'Review Trends Over Time' }, tooltip: { mode: 'index', intersect: false } }, scales: { x: { type: 'time', time: { unit: 'month', parser: 'YYYY-MM', displayFormats: { month: 'MMM YYYY' } }, title: { display: true, text: 'Month' } }, y: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'Number of Reviews' }, beginAtZero: true }, y1: { type: 'linear', display: true, position: 'right', title: { display: true, text: 'Average Rating (out of 5)' }, beginAtZero: true, max: 5, grid: { drawOnChartArea: false } } } }});
+                document.getElementById('timeSeriesChart').style.display = 'block'; document.querySelector('#timeSeriesChartContainer .chart-no-data-message').style.display = 'none';
+            } else { document.querySelector('#timeSeriesChartContainer .chart-no-data-message').style.display = 'block'; document.getElementById('timeSeriesChart').style.display = 'none';}
 
-            if (averageRatingsData && Object.keys(averageRatingsData).length > 0) {
-                const sortedRatings = Object.entries(averageRatingsData).sort((a, b) => b[1] - a[1]);
-                new Chart(document.getElementById('ratingsChart'), {
-                    type: 'bar', data: { labels: sortedRatings.map(item => item[0]), datasets: [{ label: 'Average Rating', data: sortedRatings.map(item => item[1]), backgroundColor: 'rgba(54, 162, 235, 0.6)', borderColor: 'rgba(54, 162, 235, 1)', borderWidth: 1 }] },
-                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 5, title: { display: true, text: 'Average Rating (out of 5)' } }, x: { title: { display: true, text: 'Restaurant' } } }, plugins: { legend: { display: false }, title: { display: true, text: 'Average Restaurant Ratings' } } }
-                });
-            } else { document.getElementById('ratingsChart').parentElement.innerHTML = '<p class="no-data">No rating data available for the current selection.</p>';}
+            const citySelect = document.getElementById('selected_city');
+            const restaurantSelect = document.getElementById('selected_restaurant_name');
+            const filterForm = document.getElementById('filterForm'); 
 
+            function handleFilterChange() {
+                const selectedCity = citySelect.value;
+                const selectedRestaurant = restaurantSelect.value;
+                const currentBounds = googleMapInstance ? googleMapInstance.getBounds() : null; 
+                fetchFilteredDashboardData(currentBounds, selectedCity, selectedRestaurant); 
+            }
 
-            if (timeSeriesRawData && timeSeriesRawData.labels && timeSeriesRawData.labels.length > 0) {
-                new Chart(document.getElementById('timeSeriesChart'), {
-                    type: 'line', data: { labels: timeSeriesRawData.labels, datasets: [ { label: 'Number of Reviews', data: timeSeriesRawData.review_counts, borderColor: 'rgba(255, 159, 64, 1)', backgroundColor: 'rgba(255, 159, 64, 0.5)', yAxisID: 'y', tension: 0.1 }, { label: 'Average Rating', data: timeSeriesRawData.average_ratings, borderColor: 'rgba(153, 102, 255, 1)', backgroundColor: 'rgba(153, 102, 255, 0.5)', yAxisID: 'y1', tension: 0.1 } ] },
-                    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, stacked: false, plugins: { title: { display: true, text: 'Review Trends Over Time' }, tooltip: { mode: 'index', intersect: false } }, scales: { x: { type: 'time', time: { unit: 'month', parser: 'YYYY-MM', displayFormats: { month: 'MMM YYYY' } }, title: { display: true, text: 'Month' } }, y: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'Number of Reviews' }, beginAtZero: true }, y1: { type: 'linear', display: true, position: 'right', title: { display: true, text: 'Average Rating (out of 5)' }, beginAtZero: true, max: 5, grid: { drawOnChartArea: false } } } }
-                });
-            } else { document.getElementById('timeSeriesChart').parentElement.innerHTML = '<p class="no-data">No time series data available for the current selection.</p>';}
+            citySelect.addEventListener('change', handleFilterChange);
+            restaurantSelect.addEventListener('change', handleFilterChange);
+            filterForm.addEventListener('submit', function(event) {
+                event.preventDefault(); 
+                handleFilterChange(); 
+            });
         });
     </script>
 
     <div class="review-section">
-        <h2>Individual Reviews (Sample for {% if selected_restaurant_name %}{{ selected_restaurant_name }}{% else %}All Restaurants{% endif %})</h2>
+        <h2>Individual Reviews (Sample for {% if selected_restaurant_name %}{{ selected_restaurant_name }}{% elif selected_city %}{{ selected_city }}{% else %}All Locations{% endif %})</h2>
         {% if reviews and reviews|length > 0 %}
             {% for review in reviews[:5] %}
                 <div class="review">
-                    <h4>{{ review.display_name }}</h4>
+                    <h4>{{ review.ui_display_name }}</h4> 
                     <p class="review-meta">Rating: {{ review.review_rating }} | Date: {{ review.review_datetime.strftime('%Y-%m-%d') if review.review_datetime else 'N/A' }}</p>
-                    {% if review.review_text %}
-                        <p>{{ review.review_text }}</p>
-                    {% endif %}
+                    {% if review.review_text %}<p>{{ review.review_text }}</p>{% endif %}
                     {% if review.review_pros %}
                     <div class="pros"><strong>Pros:</strong>
                         {% if review.review_pros is string %}<ul><li>{{ review.review_pros }}</li></ul>
