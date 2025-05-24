@@ -43,4 +43,4 @@ USER appuser
 RUN mkdir -p /app/logs && chown -R appuser:appuser /app/logs
 
 # Command to run the application
-CMD ["poetry", "run", "python", "scripts/fetch_reviews.py"] 
+CMD ["poetry", "run", "python", "scripts/fetch_reviews.py"]

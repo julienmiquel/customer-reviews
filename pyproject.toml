@@ -12,6 +12,7 @@ google-cloud-bigquery = "^3.11.4"
 google-maps-places = "^0.1.0"
 python-dotenv = "^1.0.0"
 structlog = "^23.1.0"
+mesop = "^0.6.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"

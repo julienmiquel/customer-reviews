@@ -30,6 +30,28 @@ section_style = me.Style(
     box_shadow="0 2px 4px rgba(0,0,0,0.1)"
 )
 
+# Specific style for summary statistics section
+summary_stats_section_style = me.Style(
+    background="#fff", 
+    padding=me.Padding.all(20), 
+    border_radius=8, 
+    margin=me.Margin(bottom=20), 
+    box_shadow="0 2px 4px rgba(0,0,0,0.1)",
+    text_align="center"
+)
+
+# Specific style for side-by-side chart sections (e.g., Pros/Cons)
+side_by_side_chart_section_style = me.Style(
+    background="#fff", 
+    padding=me.Padding.all(20), 
+    border_radius=8, 
+    margin=me.Margin(bottom=20), 
+    box_shadow="0 2px 4px rgba(0,0,0,0.1)",
+    flex_basis="45%",
+    min_width="300px"
+)
+
+
 # Standard style for containers holding charts or their "no data" messages.
 # Ensures consistent height for chart areas.
 chart_container_style = me.Style(
@@ -57,16 +79,12 @@ def create_chart_html(canvas_id: str, chart_type: str, chart_data_json: dict, ch
     Args:
         canvas_id: The HTML ID for the canvas element.
         chart_type: The type of chart (e.g., 'bar', 'line').
-        chart_data_json: The data object for the chart, already JSON-serialized.
-        chart_options_json: The options object for the chart, already JSON-serialized.
+        chart_data_json: The data object for the chart.
+        chart_options_json: The options object for the chart.
 
     Returns:
         A string containing the HTML and JavaScript for the chart.
     """
-    # js_data and js_options are already JSON strings if coming from render_chart_section
-    # If called directly, ensure they are serialized json.dumps(chart_data)
-    # For this refactor, chart_data_for_js and chart_options_for_js will be dicts,
-    # so json.dumps is needed here.
     js_data = json.dumps(chart_data_json)
     js_options = json.dumps(chart_options_json)
 
@@ -99,23 +117,12 @@ def get_map_embed_html(
     map_data_js_variable_name: str,
     map_data_json_str: str,
     map_init_function_name: str,
-    google_map_id_string: str, # For differentiating map styles/features if needed
+    google_map_id_string: str, 
     gmaps_api_key: str 
 ) -> str:
     """
     Generates the HTML and JavaScript to embed a Google Map.
     Handles dynamic loading of the Google Maps API script and map initialization.
-
-    Args:
-        map_element_id: HTML ID for the div where the map will be rendered.
-        map_data_js_variable_name: Name for the JavaScript variable holding map data.
-        map_data_json_str: JSON string of map data.
-        map_init_function_name: Unique name for the map initialization JavaScript function.
-        google_map_id_string: The Map ID for styling the specific Google Map instance.
-        gmaps_api_key: The Google Maps API key.
-
-    Returns:
-        A string containing HTML and JavaScript for the Google Map.
     """
     api_loaded_flag = f"window.googleMapApiLoaded_{map_element_id}" 
 
@@ -206,37 +213,30 @@ def get_map_embed_html(
     </script>
     '''
 
-# New Chart Section Rendering Function
 def render_chart_section(
     title_text: str,
     chart_canvas_id: str,
     chart_type: str,
-    chart_data_for_js: Optional[dict],    # Data for create_chart_html's 'data' param
-    chart_options_for_js: Optional[dict], # Data for create_chart_html's 'options' param
-    data_exists: bool,          # Boolean to indicate if data is present
-    custom_section_style: Optional[me.Style] = None # For additional styling like flex_basis
+    chart_data_for_js: Optional[dict],    
+    chart_options_for_js: Optional[dict], 
+    data_exists: bool,          
+    custom_section_style: Optional[me.Style] = None 
 ):
     """
     Renders a complete chart section including title, chart, and no-data fallback.
-    Uses module-level style constants and the create_chart_html function.
     """
-    current_section_style = section_style # Start with base section_style
-    if custom_section_style:
-        current_section_style = current_section_style.extend(custom_section_style)
+    current_section_style = custom_section_style if custom_section_style else section_style
 
     with me.box(style=current_section_style):
         me.text(title_text, type="headline-3", style=me.Style(text_align="center", margin=me.Margin(bottom=15)))
         if data_exists:
-            # Ensure chart_data_for_js and chart_options_for_js are not None before passing
             if chart_data_for_js is not None and chart_options_for_js is not None:
-                 me.embed_html(create_chart_html(chart_canvas_id, chart_type, chart_data_for_js, chart_options_for_js))
+                 me.html(create_chart_html(chart_canvas_id, chart_type, chart_data_for_js, chart_options_for_js), mode="sandboxed")
             else:
-                # This case should ideally not be hit if data_exists is true, but as a fallback:
                 with me.box(style=chart_container_style): 
                      me.text("Chart data is missing despite data_exists flag.", style=NO_DATA_STYLE) 
         else:
             with me.box(style=chart_container_style): 
-                 # Simplified no-data message using parts of the title
                  simple_title_part = title_text.lower().replace('overall','').replace('top 10','').replace('(filtered)','').strip()
                  me.text(f"No data available for {simple_title_part}.", style=NO_DATA_STYLE) 
 
@@ -266,7 +266,8 @@ def root_page():
 @me.page(path="/general", title="Restaurant Review Dashboard - General Overview")
 def general_page():
     """Renders the general overview page with summary statistics and overall charts."""
-    me.style(r"""
+    me.head_html(r"""
+    <style>
     body {{
         font-family: sans-serif;
         margin: 0; 
@@ -274,13 +275,14 @@ def general_page():
         background-color: #f4f4f4;
         color: #333;
     }}
+    </style>
     """)
 
     me.html(r"""
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0/dist/chartjs-adapter-moment.min.js"></script>
-    """)
+    """, mode="unsafe_trusted_resource") # For external scripts
 
     render_nav() 
 
@@ -295,7 +297,7 @@ def general_page():
                 me.text(error_message, style=me.Style(color="red"))
             return 
 
-        with me.box(style=section_style.extend(text_align="center", padding=me.Padding.all(20), margin=me.Margin(bottom=20))):
+        with me.box(style=summary_stats_section_style):
             me.text("Overall Summary Statistics", type="headline-2", style=me.Style(margin=me.Margin(bottom=15)))
             total_reviews_count = len(all_reviews_data)
             total_restaurants_count = len(restaurants_map_data) 
@@ -307,9 +309,7 @@ def general_page():
 
         top_pros, top_cons, average_restaurant_ratings, reviews_over_time_chart_data = process_review_data(all_reviews_data)
 
-        # Section: Top Pros and Cons Charts (Side-by-Side)
         with me.box(style=me.Style(display="flex", flex_direction="row", gap="20px", justify_content="space-around", margin=me.Margin(bottom=20), flex_wrap="wrap")):
-            # Prepare Pros Chart Data
             pros_chart_data_for_js = None
             pros_chart_options_for_js = None
             if top_pros:
@@ -318,15 +318,11 @@ def general_page():
             
             render_chart_section(
                 title_text="Overall Top 10 Review Pros",
-                chart_canvas_id="overallProsChartCanvas",
-                chart_type="bar",
-                chart_data_for_js=pros_chart_data_for_js,
-                chart_options_for_js=pros_chart_options_for_js,
-                data_exists=bool(top_pros),
-                custom_section_style=me.Style(flex_basis="45%", min_width="300px")
+                chart_canvas_id="overallProsChartCanvas", chart_type="bar",
+                chart_data_for_js=pros_chart_data_for_js, chart_options_for_js=pros_chart_options_for_js,
+                data_exists=bool(top_pros), custom_section_style=side_by_side_chart_section_style
             )
             
-            # Prepare Cons Chart Data
             cons_chart_data_for_js = None
             cons_chart_options_for_js = None
             if top_cons:
@@ -335,15 +331,11 @@ def general_page():
 
             render_chart_section(
                 title_text="Overall Top 10 Review Cons",
-                chart_canvas_id="overallConsChartCanvas",
-                chart_type="bar",
-                chart_data_for_js=cons_chart_data_for_js,
-                chart_options_for_js=cons_chart_options_for_js,
-                data_exists=bool(top_cons),
-                custom_section_style=me.Style(flex_basis="45%", min_width="300px")
+                chart_canvas_id="overallConsChartCanvas", chart_type="bar",
+                chart_data_for_js=cons_chart_data_for_js, chart_options_for_js=cons_chart_options_for_js,
+                data_exists=bool(top_cons), custom_section_style=side_by_side_chart_section_style
             )
 
-        # Prepare Top Rated Restaurants Chart Data
         ratings_chart_data_for_js = None
         ratings_chart_options_for_js = None
         data_exists_for_ratings = bool(average_restaurant_ratings and len(average_restaurant_ratings) > 0)
@@ -354,14 +346,11 @@ def general_page():
 
         render_chart_section(
             title_text="Top 10 Highest Rated Restaurants",
-            chart_canvas_id="overallRatingsChartCanvas",
-            chart_type="bar",
-            chart_data_for_js=ratings_chart_data_for_js,
-            chart_options_for_js=ratings_chart_options_for_js,
+            chart_canvas_id="overallRatingsChartCanvas", chart_type="bar",
+            chart_data_for_js=ratings_chart_data_for_js, chart_options_for_js=ratings_chart_options_for_js,
             data_exists=data_exists_for_ratings
         )
         
-        # Map of All Restaurants
         with me.box(style=section_style):
             me.text("Map of All Restaurants", type="headline-3", style=me.Style(text_align="center", margin=me.Margin(bottom=15)))
             if restaurants_map_data:
@@ -374,12 +363,11 @@ def general_page():
                     google_map_id_string="GENERAL_DEMO_MAP_ID", 
                     gmaps_api_key=GMAPS_API_KEY 
                 )
-                me.embed_html(map_html)
+                me.html(map_html, mode="sandboxed")
             else:
                 with me.box(style=map_placeholder_style): 
                     me.text("No map data available.", style=NO_DATA_STYLE)
 
-        # Prepare Review Trends Chart Data
         trends_chart_data_for_js = None
         trends_chart_options_for_js = None
         data_exists_for_trends = bool(reviews_over_time_chart_data and reviews_over_time_chart_data.get('labels') and len(reviews_over_time_chart_data['labels']) > 0)
@@ -389,10 +377,8 @@ def general_page():
 
         render_chart_section(
             title_text="Overall Review Trends Over Time",
-            chart_canvas_id="overallTimeSeriesChartCanvas",
-            chart_type="line",
-            chart_data_for_js=trends_chart_data_for_js,
-            chart_options_for_js=trends_chart_options_for_js,
+            chart_canvas_id="overallTimeSeriesChartCanvas", chart_type="line",
+            chart_data_for_js=trends_chart_data_for_js, chart_options_for_js=trends_chart_options_for_js,
             data_exists=data_exists_for_trends
         )
 
@@ -428,7 +414,8 @@ def on_select_restaurant_change(e: me.SelectSelectionChangeEvent):
 @me.page(path="/detailed", title="Restaurant Review Dashboard - Detailed View")
 def detailed_filter_page(): 
     """Renders the detailed filter page with interactive controls and filtered views."""
-    me.style(r"""
+    me.head_html(r"""
+    <style>
     body {{
         font-family: sans-serif;
         margin: 0; 
@@ -436,13 +423,14 @@ def detailed_filter_page():
         background-color: #f4f4f4;
         color: #333;
     }}
+    </style>
     """)
 
     me.html(r"""
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0/dist/chartjs-adapter-moment.min.js"></script>
-    """)
+    """, mode="unsafe_trusted_resource") # For external scripts
     
     if "selected_city" not in me.state():
       me.state.selected_city = "All Cities"
@@ -542,14 +530,12 @@ def detailed_filter_page():
                     google_map_id_string="DETAILED_DEMO_MAP_ID", 
                     gmaps_api_key=GMAPS_API_KEY
                 )
-                me.embed_html(map_html)
+                me.html(map_html, mode="sandboxed")
             else:
                 with me.box(style=map_placeholder_style):
                     me.text("No restaurant location data available to display on map.", style=NO_DATA_STYLE)
 
-        # Section: Pros and Cons Charts for filtered data
         with me.box(style=me.Style(display="flex", flex_direction="row", gap="20px", justify_content="space-around", margin=me.Margin(bottom=20), flex_wrap="wrap")):
-            # Prepare Filtered Pros Chart Data
             filtered_pros_chart_data = None
             filtered_pros_chart_options = None
             if top_pros_detailed:
@@ -558,15 +544,11 @@ def detailed_filter_page():
             
             render_chart_section(
                 title_text="Top 10 Review Pros (Filtered)",
-                chart_canvas_id="detailedProsChartCanvas", 
-                chart_type="bar",
-                chart_data_for_js=filtered_pros_chart_data,
-                chart_options_for_js=filtered_pros_chart_options,
-                data_exists=bool(top_pros_detailed),
-                custom_section_style=me.Style(flex_basis="45%", min_width="300px")
+                chart_canvas_id="detailedProsChartCanvas", chart_type="bar",
+                chart_data_for_js=filtered_pros_chart_data, chart_options_for_js=filtered_pros_chart_options,
+                data_exists=bool(top_pros_detailed), custom_section_style=side_by_side_chart_section_style
             )
             
-            # Prepare Filtered Cons Chart Data
             filtered_cons_chart_data = None
             filtered_cons_chart_options = None
             if top_cons_detailed:
@@ -575,15 +557,11 @@ def detailed_filter_page():
 
             render_chart_section(
                 title_text="Top 10 Review Cons (Filtered)",
-                chart_canvas_id="detailedConsChartCanvas", 
-                chart_type="bar",
-                chart_data_for_js=filtered_cons_chart_data,
-                chart_options_for_js=filtered_cons_chart_options,
-                data_exists=bool(top_cons_detailed),
-                custom_section_style=me.Style(flex_basis="45%", min_width="300px")
+                chart_canvas_id="detailedConsChartCanvas", chart_type="bar",
+                chart_data_for_js=filtered_cons_chart_data, chart_options_for_js=filtered_cons_chart_options,
+                data_exists=bool(top_cons_detailed), custom_section_style=side_by_side_chart_section_style
             )
         
-        # Prepare Filtered Average Ratings Chart Data
         filtered_ratings_chart_data = None
         filtered_ratings_chart_options = None
         data_exists_for_filtered_ratings = bool(avg_ratings_detailed and len(avg_ratings_detailed) > 0)
@@ -594,14 +572,11 @@ def detailed_filter_page():
 
         render_chart_section(
             title_text="Average Restaurant Ratings (Filtered)",
-            chart_canvas_id="detailedRatingsChartCanvas", 
-            chart_type="bar",
-            chart_data_for_js=filtered_ratings_chart_data,
-            chart_options_for_js=filtered_ratings_chart_options,
+            chart_canvas_id="detailedRatingsChartCanvas", chart_type="bar",
+            chart_data_for_js=filtered_ratings_chart_data, chart_options_for_js=filtered_ratings_chart_options,
             data_exists=data_exists_for_filtered_ratings
         )
 
-        # Prepare Filtered Time Series Chart Data
         filtered_time_series_data = None
         filtered_time_series_options = None
         data_exists_for_filtered_trends = bool(time_series_detailed and time_series_detailed.get('labels') and len(time_series_detailed['labels']) > 0)
@@ -611,14 +586,11 @@ def detailed_filter_page():
         
         render_chart_section(
             title_text="Review Trends Over Time (Filtered)",
-            chart_canvas_id="detailedTimeSeriesChartCanvas", 
-            chart_type="line",
-            chart_data_for_js=filtered_time_series_data,
-            chart_options_for_js=filtered_time_series_options,
+            chart_canvas_id="detailedTimeSeriesChartCanvas", chart_type="line",
+            chart_data_for_js=filtered_time_series_data, chart_options_for_js=filtered_time_series_options,
             data_exists=data_exists_for_filtered_trends
         )
         
-        # Section: Individual Reviews (Filtered) - This section remains as it's not a chart.
         with me.box(style=section_style): 
             review_section_title = "Individual Reviews"
             if me.state.selected_restaurant_name and me.state.selected_restaurant_name != "All Restaurants":

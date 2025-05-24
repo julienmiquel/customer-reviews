@@ -1,0 +1,29 @@
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment folders (common names)
+.venv/
+venv/
+env/
+.env/
+
+# Test related
+.pytest_cache/
+.coverage
+
+# IDE/editor specific
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Any local instance or sensitive data files if they were to be in this dir
+# e.g., local_config.py
+# *.log (if logs are not meant to be copied into the image)
