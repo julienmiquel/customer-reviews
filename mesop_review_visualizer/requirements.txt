@@ -1,0 +1,3 @@
+mesop
+google-cloud-bigquery>=3.11.4
+# Add other specific dependencies for this app later if needed
