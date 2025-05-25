@@ -1,0 +1,3 @@
+mesop
+google-cloud-bigquery>=3.0
+# Add pandas if it's a direct dependency or becomes one during refactoring
