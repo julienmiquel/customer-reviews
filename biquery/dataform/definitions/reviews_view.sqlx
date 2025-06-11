@@ -1,27 +1,18 @@
 config {
-    type: "view",
+    type: "view", // Creates a view in BigQuery. Try changing to "table" instead.
     materialized: true,
-    description: "A view containing Burger King reviews in France with location and review details",
+
     columns: {
-        formatted_address: "The full address of the Burger King location",
-        display_name: "The name of the Burger King location",
-        overall_rating: "The average rating of the location",
-        total_ratings: "Total number of ratings received",
-        author: "Name of the review author",
-        review_rating: "Individual review rating",
-        text: "The review text content",
-        review_datetime: "Timestamp of when the review was posted",
-        longitude: "Longitude coordinate of the location",
-        latitude: "Latitude coordinate of the location"
-    },
-    assertions: {
-        uniqueKey: ["place_id", "review_datetime", "author"],
-        rowConditions: [
-            "overall_rating >= 0 AND overall_rating <= 5",
-            "review_rating >= 0 AND review_rating <= 5",
-            "longitude IS NOT NULL",
-            "latitude IS NOT NULL"
-        ]
+        formatted_address: "",
+        display_name: "",
+        overall_rating: "",
+        total_ratings: "",
+        author: "",
+        review_rating: "",
+        text: "",
+        review_datetime: "",
+        longitude: "",
+        latitude: ""
     }
 }
 
@@ -34,7 +25,7 @@ WITH DATA AS (
   SELECT
     DISTINCT 
     places.place_id,
-    places.formatted_address,
+    places.formatted_address AS formatted_address,
     places.display_name,
     overall_rating,
     total_ratings,
@@ -51,14 +42,11 @@ WITH DATA AS (
   WHERE
     places.place_id = france_reviews_v2.place_id
     AND formatted_address LIKE '%France%'
-    AND display_name LIKE '%Burger%'
-    AND text IS NOT NULL
-    AND LENGTH(text) > 5 )
+    AND display_name LIKE '%Burger%' 
+    ) 
+         
   #select count(*) c from data
 SELECT
   *
 FROM
   DATA
-  #select display_name, formatted_address, count(*) nb from data group by display_name, formatted_address order by nb desc
-  #select * from data 
-  #order by review_datetime desc

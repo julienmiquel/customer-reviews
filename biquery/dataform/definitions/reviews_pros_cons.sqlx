@@ -2,7 +2,6 @@ config {
     type: "incremental",
     name: "reviews_pros_cons",
     description: "Review analysis using Gemini model to extract pros, cons, and improvement suggestions",
-    materialized: true,
     uniqueKey: ["place_id", "review_datetime"],
     dependencies: ["reviews_view"],
     columns: {
@@ -22,20 +21,17 @@ config {
 }
 
 SELECT
-#  ml_response.ml_generate_text_llm_result AS generated_description,
   review_pros,
   review_cons,
   review_description,
   #ml_response.ml_generate_text_rai_result as rai_result,                  
   #ml_response.ml_generate_text_status as llm_status,
-  source_table.text as review_text,
-  #ml_response.ml_generate_text_status,  
+  source_table.text as review_text,  
   source_table.place_id,
 source_table.formatted_address,
 source_table.display_name,
 source_table.overall_rating,
 source_table.total_ratings,
---author
 source_table.review_rating,
 source_table.review_datetime,
 source_table.longitude,
@@ -119,7 +115,9 @@ CONCAT(
 FROM
         ${ref("reviews_view")} AS source_table
         where length(text ) > 5  
-        --and review_rating < 4                 limit 10
+        ${when(incremental(),
+        `AND NOT EXISTS (SELECT 1 FROM ${self()} AS dest_table WHERE dest_table.place_id = source_table.place_id AND dest_table.review_datetime = source_table.review_datetime) order by source_table.review_datetime desc limit 200`,
+        `limit 10`)}
     ),
     STRUCT(
       'review_pros ARRAY<STRING>, review_cons ARRAY<STRING>, review_description ARRAY<STRING>' AS output_schema,

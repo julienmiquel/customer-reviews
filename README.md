@@ -11,6 +11,35 @@ A Python tool that fetches and stores Burger King restaurant reviews in France u
 - 🧪 Comprehensive test suite
 - 🔒 Secure API key management
 
+## Project Structure
+```
+bk-maps/
+├── .env.example        # Example environment variables
+├── .git/               # Git directory
+├── .github/            # GitHub specific files (e.g., workflows)
+│   └── workflows/
+│       └── ci.yml      # Example CI workflow
+├── .gitignore          # Specifies intentionally untracked files
+├── Dockerfile          # Docker configuration
+├── LICENSE             # Project license
+├── README.md           # This file
+├── poetry.lock         # Poetry lock file
+├── pyproject.toml      # Poetry project configuration
+├── scripts/            # Main executable scripts
+│   └── fetch_reviews.py
+├── src/                # Source code for the application/library
+│   └── bk_maps/        # Main package
+│       ├── __init__.py
+│       ├── bigquery_client.py # Module for BigQuery interactions
+│       ├── places_api.py   # Module for Google Places API interactions
+│       └── utils.py        # Utility functions
+└── tests/              # Test suite
+    ├── __init__.py     # Makes 'tests' a Python package
+    ├── conftest.py       # Pytest configuration and fixtures
+    ├── test_bigquery_client.py
+    └── test_places_api.py
+```
+
 ## Prerequisites
 
 - Python 3.9 or higher
